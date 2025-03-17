@@ -12,6 +12,8 @@ const EnvSchema = z.object({
   DATABASE_URL: z.string().url(),
   JWT_SECRET: z.string().min(32),
   COOKIE_SECRET: z.string(),
+  RESEND_API_KEY: z.string(),
+  FRONTEND_URL: z.string(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
