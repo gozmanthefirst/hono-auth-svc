@@ -2,8 +2,8 @@
 
 ## Todos
 
-- Check out refresh tokens.
-- Set up email verification, and password reset.
+- Implement refresh tokens.
 - Write JSDocs for lib functions
 - Fix imports issue when compiling to JS
 - Use class-based lib functions. Get inspo from munchies.
+- Rate limiting.
