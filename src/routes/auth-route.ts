@@ -18,6 +18,11 @@ import {
   createVerificationToken,
   validateVerificationToken,
 } from "@/lib/verification";
+import {
+  authRateLimiter,
+  emailRateLimiter,
+  passwordResetLimiter,
+} from "../lib/rate-limit";
 
 const auth = new Hono({ strict: false });
 
@@ -47,83 +52,36 @@ const resetPasswordSchema = z.object({
 
 //* Register a new user
 //* POST /auth/register
-auth.post("/register", zValidator("json", signUpSchema), async (c) => {
-  const { email, password, name } = c.req.valid("json");
+auth.post(
+  "/register",
+  authRateLimiter,
+  zValidator("json", signUpSchema),
+  async (c) => {
+    const { email, password, name } = c.req.valid("json");
 
-  // Check if user already exists
-  const userExists = await db.user.findUnique({ where: { email } });
-  if (userExists) {
-    return c.json(
-      errorResponse("USER_EXISTS", "User with this email already exists"),
-      StatusCodes.CONFLICT,
-    );
-  }
+    // Check if user already exists
+    const userExists = await db.user.findUnique({ where: { email } });
+    if (userExists) {
+      return c.json(
+        errorResponse("USER_EXISTS", "User with this email already exists"),
+        StatusCodes.CONFLICT,
+      );
+    }
 
-  // Hash password
-  const hashedPassword = await hashPassword(password);
+    // Hash password
+    const hashedPassword = await hashPassword(password);
 
-  // Create user
-  const user = await db.user.create({
-    data: {
-      email,
-      passwordHash: hashedPassword,
-      name,
-    },
-  });
-
-  // Create and send verification token
-  const verificationToken = await createVerificationToken(user);
-  await sendVerificationEmail({
-    to: user.email,
-    name: user.name,
-    token: verificationToken.token,
-  });
-
-  return c.json(
-    successResponse(
-      "User created successfully. Please check your email to verify your account.",
-      {
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-        },
+    // Create user
+    const user = await db.user.create({
+      data: {
+        email,
+        passwordHash: hashedPassword,
+        name,
       },
-    ),
-    StatusCodes.CREATED,
-  );
-});
+    });
 
-//* Login a user
-//* POST /auth/login
-auth.post("/login", zValidator("json", loginSchema), async (c) => {
-  // Delete any existing session
-  const existingToken = await getSignedCookie(
-    c,
-    env.COOKIE_SECRET,
-    "auth_service_session_token",
-  );
-  if (existingToken) {
-    await db.session.delete({ where: { token: existingToken } });
-    deleteCookie(c, "auth_service_session_token");
-  }
-
-  const { email, password } = c.req.valid("json");
-
-  // If user doesn't exist or the password is incorrect, return 401
-  const user = await db.user.findUnique({ where: { email } });
-  if (!user || !(await comparePasswords(password, user.passwordHash))) {
-    return c.json(
-      errorResponse("INVALID_DATA", "Invalid email or password"),
-      StatusCodes.UNAUTHORIZED,
-    );
-  }
-
-  if (!user.emailVerified) {
-    // Create new verification token
+    // Create and send verification token
     const verificationToken = await createVerificationToken(user);
-
-    // Send verification email
     await sendVerificationEmail({
       to: user.email,
       name: user.name,
@@ -131,48 +89,105 @@ auth.post("/login", zValidator("json", loginSchema), async (c) => {
     });
 
     return c.json(
-      errorResponse(
-        "EMAIL_NOT_VERIFIED",
-        "Your email is not verified. A new verification email has been sent.",
+      successResponse(
+        "User created successfully. Please check your email to verify your account.",
+        {
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+          },
+        },
       ),
-      StatusCodes.FORBIDDEN,
+      StatusCodes.CREATED,
     );
-  }
+  },
+);
 
-  // Get session expiry date
-  const expires = new Date();
-  expires.setDate(expires.getDate() + 30);
+//* Login a user
+//* POST /auth/login
+auth.post(
+  "/login",
+  authRateLimiter,
+  zValidator("json", loginSchema),
+  async (c) => {
+    // Delete any existing session
+    const existingToken = await getSignedCookie(
+      c,
+      env.COOKIE_SECRET,
+      "auth_service_session_token",
+    );
+    if (existingToken) {
+      await db.session.delete({ where: { token: existingToken } });
+      deleteCookie(c, "auth_service_session_token");
+    }
 
-  // Create session
-  const session = await createSession(user, expires);
+    const { email, password } = c.req.valid("json");
 
-  // Set session token in HTTP-only cookie
-  await setSignedCookie(
-    c,
-    "auth_service_session_token",
-    session.token,
-    env.COOKIE_SECRET,
-    {
-      path: "/",
-      secure: env.NODE_ENV === "production",
-      domain: env.NODE_ENV === "production" ? "your-domain.com" : undefined,
-      httpOnly: true,
-      expires,
-      sameSite: "Strict",
-    },
-  );
+    // If user doesn't exist or the password is incorrect, return 401
+    const user = await db.user.findUnique({ where: { email } });
+    if (!user || !(await comparePasswords(password, user.passwordHash))) {
+      return c.json(
+        errorResponse("INVALID_DATA", "Invalid email or password"),
+        StatusCodes.UNAUTHORIZED,
+      );
+    }
 
-  return c.json(
-    successResponse("Login successful", {
-      user: {
-        id: user.id,
-        email: user.email,
+    if (!user.emailVerified) {
+      // Create new verification token
+      const verificationToken = await createVerificationToken(user);
+
+      // Send verification email
+      await sendVerificationEmail({
+        to: user.email,
         name: user.name,
+        token: verificationToken.token,
+      });
+
+      return c.json(
+        errorResponse(
+          "EMAIL_NOT_VERIFIED",
+          "Your email is not verified. A new verification email has been sent.",
+        ),
+        StatusCodes.FORBIDDEN,
+      );
+    }
+
+    // Get session expiry date
+    const expires = new Date();
+    expires.setDate(expires.getDate() + 30);
+
+    // Create session
+    const session = await createSession(user, expires);
+
+    // Set session token in HTTP-only cookie
+    await setSignedCookie(
+      c,
+      "auth_service_session_token",
+      session.token,
+      env.COOKIE_SECRET,
+      {
+        path: "/",
+        secure: env.NODE_ENV === "production",
+        domain: env.NODE_ENV === "production" ? "your-domain.com" : undefined,
+        httpOnly: true,
+        expires,
+        sameSite: "Strict",
       },
-    }),
-    StatusCodes.OK,
-  );
-});
+    );
+
+    return c.json(
+      successResponse("Login successful", {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+        },
+      }),
+      StatusCodes.OK,
+    );
+  },
+);
 
 //* Logout user
 //* POST /auth/logout
@@ -233,6 +248,7 @@ auth.get("/verify-email", async (c) => {
 //* POST /auth/resend-verification
 auth.post(
   "/resend-verification",
+  emailRateLimiter,
   zValidator("json", resendVerificationSchema),
   async (c) => {
     const { email } = c.req.valid("json");
@@ -284,6 +300,7 @@ auth.post(
 //* POST /auth/request-reset
 auth.post(
   "/request-reset",
+  passwordResetLimiter,
   zValidator("json", requestPasswordResetSchema),
   async (c) => {
     const { email } = c.req.valid("json");
@@ -323,6 +340,7 @@ auth.post(
 //* POST /auth/reset-password
 auth.post(
   "/reset-password",
+  passwordResetLimiter,
   zValidator("json", resetPasswordSchema),
   async (c) => {
     const { token, password } = c.req.valid("json");
