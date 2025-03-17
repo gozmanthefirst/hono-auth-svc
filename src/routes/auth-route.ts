@@ -1,13 +1,14 @@
 import { Hono } from "hono";
-import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import { deleteCookie, getSignedCookie, setSignedCookie } from "hono/cookie";
 import { zValidator } from "@hono/zod-validator";
 import { StatusCodes } from "http-status-codes";
 import { z } from "zod";
 
+import { env } from "@/env";
 import { errorResponse, successResponse } from "@/lib/api-response";
+import { comparePasswords, hashPassword } from "@/lib/auth";
 import db from "@/lib/prisma";
 import { createSession } from "@/lib/session";
-import { comparePasswords, hashPassword } from "../lib/auth";
 
 const auth = new Hono({ strict: false });
 
@@ -64,7 +65,11 @@ auth.post("/register", zValidator("json", signUpSchema), async (c) => {
 //* POST /auth/login
 auth.post("/login", zValidator("json", loginSchema), async (c) => {
   // Delete any existing session
-  const existingToken = getCookie(c, "auth_service_session_token");
+  const existingToken = await getSignedCookie(
+    c,
+    env.COOKIE_SECRET,
+    "auth_service_session_token",
+  );
   if (existingToken) {
     await db.session.delete({ where: { token: existingToken } });
     deleteCookie(c, "auth_service_session_token");
@@ -89,15 +94,20 @@ auth.post("/login", zValidator("json", loginSchema), async (c) => {
   const session = await createSession(user, expires);
 
   // Set session token in HTTP-only cookie
-  setCookie(c, "auth_service_session_token", session.token, {
-    path: "/",
-    secure: true,
-    domain: "book.gozman.dev",
-    httpOnly: true,
-    // maxAge: 30 * 24 * 60 * 60,
-    expires,
-    sameSite: "Strict",
-  });
+  await setSignedCookie(
+    c,
+    "auth_service_session_token",
+    session.token,
+    env.COOKIE_SECRET,
+    {
+      path: "/",
+      secure: env.NODE_ENV === "production",
+      domain: env.NODE_ENV === "production" ? "your-domain.com" : undefined,
+      httpOnly: true,
+      expires,
+      sameSite: "Strict",
+    },
+  );
 
   return c.json(
     successResponse("Login successful", {
@@ -114,7 +124,11 @@ auth.post("/login", zValidator("json", loginSchema), async (c) => {
 //* Logout user
 //* POST /auth/logout
 auth.post("/logout", async (c) => {
-  const sessionToken = getCookie(c, "auth_service_session_token");
+  const sessionToken = await getSignedCookie(
+    c,
+    env.COOKIE_SECRET,
+    "auth_service_session_token",
+  );
 
   if (sessionToken) {
     // Delete session from database
