@@ -1,24 +1,46 @@
 import { Hono } from "hono";
+import { csrf } from "hono/csrf";
+import { secureHeaders } from "hono/secure-headers";
 import { serve } from "@hono/node-server";
 
+import auth from "@/routes/auth-route";
 import { env } from "./env";
+import { authMiddleware } from "./middleware/auth-middleware";
 
-const app = new Hono();
+import "./types";
 
-app.get("/", (c) => {
-  return c.text("Hello Hono!");
-});
+const app = new Hono({ strict: false });
 
-app.get("/debug", (c) => {
-  return c.json(env);
-});
+// CSRF Protection
+app.use(
+  csrf({
+    origin: ["http://localhost:3000", "http://localhost:3000"],
+  }),
+);
 
-app.post("/auth/sign-up", (c) => {
-  return c.json({});
-});
+// Security Headers
+app.use(
+  "*",
+  secureHeaders({
+    xFrameOptions: "DENY",
+    xXssProtection: "1",
+    strictTransportSecurity:
+      env.NODE_ENV === "production"
+        ? "max-age=31536000; includeSubDomains"
+        : false,
+    referrerPolicy: "strict-origin-when-cross-origin",
+  }),
+);
 
-app.post("/auth/login", (c) => {
-  return c.json({});
+// Public routes
+app.route("/api/v1/auth", auth);
+
+app.use(authMiddleware);
+
+// Protected routes example
+app.get("/protected", (c) => {
+  const user = c.get("user");
+  return c.json({ message: "Protected route", user });
 });
 
 serve(
