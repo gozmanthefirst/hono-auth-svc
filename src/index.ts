@@ -6,6 +6,7 @@ import { serve } from "@hono/node-server";
 import auth from "@/routes/auth-route";
 import { env } from "./env";
 import { authMiddleware } from "./middleware/auth-middleware";
+import user from "./routes/user-route";
 
 import "./types";
 
@@ -38,10 +39,7 @@ app.route("/api/v1/auth", auth);
 app.use(authMiddleware);
 
 // Protected routes example
-app.get("/protected", (c) => {
-  const user = c.get("user");
-  return c.json({ message: "Protected route", user });
-});
+app.route("/api/v1/user", user);
 
 serve(
   {

@@ -31,7 +31,7 @@ export const comparePasswords = async (
  * @param user - The user object containing an id property
  * @returns A JWT token string that expires in 30 days
  */
-export const generateToken = (user: User): string => {
+export const generateJwtToken = (user: User): string => {
   return jwt.sign({ userId: user.id }, env.JWT_SECRET, { expiresIn: "30d" });
 };
 
@@ -41,6 +41,6 @@ export const generateToken = (user: User): string => {
  * @returns The decoded token payload containing the userId
  * @throws {JsonWebTokenError} If the token is invalid
  */
-export const verifyToken = (token: string) => {
+export const verifyJwtToken = (token: string) => {
   return jwt.verify(token, env.JWT_SECRET) as { userId: string };
 };
