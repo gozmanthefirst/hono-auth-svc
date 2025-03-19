@@ -26,25 +26,22 @@ import {
 
 const auth = new Hono({ strict: false });
 
+// Zod Schemas
 const signUpSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   name: z.string().optional(),
 });
-
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string(),
 });
-
 const resendVerificationSchema = z.object({
   email: z.string().email(),
 });
-
 const requestPasswordResetSchema = z.object({
   email: z.string().email(),
 });
-
 const resetPasswordSchema = z.object({
   token: z.string(),
   password: z.string().min(8),
