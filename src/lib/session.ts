@@ -2,9 +2,13 @@ import { randomBytes } from "crypto";
 
 import type { User } from "@prisma/client";
 
-import db from "./prisma";
+import db from "../config/prisma";
 
-export const createSession = async (user: User, expires: Date) => {
+export const createSession = async (
+  user: User,
+  expires: Date,
+  metadata: { ipAddress?: string; userAgent?: string },
+) => {
   const token = randomBytes(32).toString("hex");
 
   const session = await db.session.create({
@@ -12,6 +16,8 @@ export const createSession = async (user: User, expires: Date) => {
       userId: user.id,
       token,
       expires,
+      ipAddress: metadata.ipAddress,
+      userAgent: metadata.userAgent,
     },
   });
 
@@ -50,4 +56,23 @@ export const getCurrentSession = async (token: string) => {
   }
 
   return session;
+};
+
+export const getSuspiciousSessions = async (userId: string) => {
+  const distinctIPs = await db.session.groupBy({
+    by: ["ipAddress"],
+    where: {
+      userId,
+      ipAddress: { not: null },
+    },
+    having: {
+      ipAddress: {
+        _count: {
+          gt: 5,
+        },
+      },
+    },
+  });
+
+  return distinctIPs;
 };

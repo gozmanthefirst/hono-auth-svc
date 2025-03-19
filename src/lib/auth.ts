@@ -2,7 +2,7 @@ import type { User } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
-import { env } from "../env";
+import { env } from "../config/env";
 
 /**
  * Hashes a password using bcrypt with a salt round of 10

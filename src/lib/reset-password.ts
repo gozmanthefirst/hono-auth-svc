@@ -2,7 +2,7 @@ import { randomBytes } from "crypto";
 
 import type { User } from "@prisma/client";
 
-import db from "./prisma";
+import db from "../config/prisma";
 
 export async function createPasswordResetToken(user: User) {
   const token = randomBytes(32).toString("hex");

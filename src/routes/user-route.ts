@@ -2,9 +2,9 @@ import { Hono } from "hono";
 import { deleteCookie, getSignedCookie } from "hono/cookie";
 import { StatusCodes } from "http-status-codes";
 
-import { env } from "@/env";
-import { errorResponse, successResponse } from "@/lib/api-response";
+import { env } from "@/config/env";
 import { getCurrentSession } from "@/lib/session";
+import { errorResponse, successResponse } from "@/utils/api-response";
 
 const user = new Hono({ strict: false });
 

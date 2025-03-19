@@ -2,13 +2,11 @@ import { Hono } from "hono";
 import { deleteCookie, getSignedCookie, setSignedCookie } from "hono/cookie";
 import { zValidator } from "@hono/zod-validator";
 import { StatusCodes } from "http-status-codes";
-import { z } from "zod";
 
-import { env } from "@/env";
-import { errorResponse, successResponse } from "@/lib/api-response";
+import { env } from "@/config/env";
+import db from "@/config/prisma";
 import { comparePasswords, hashPassword } from "@/lib/auth";
 import { sendPasswordResetEmail, sendVerificationEmail } from "@/lib/email";
-import db from "@/lib/prisma";
 import {
   createPasswordResetToken,
   validatePasswordResetToken,
@@ -18,6 +16,14 @@ import {
   createVerificationToken,
   validateVerificationToken,
 } from "@/lib/verification";
+import { errorResponse, successResponse } from "@/utils/api-response";
+import {
+  loginSchema,
+  requestPasswordResetSchema,
+  resendVerificationSchema,
+  resetPasswordSchema,
+  signUpSchema,
+} from "@/validators/auth-validator";
 import {
   authRateLimiter,
   emailRateLimiter,
@@ -25,27 +31,6 @@ import {
 } from "../lib/rate-limit";
 
 const auth = new Hono({ strict: false });
-
-// Zod Schemas
-const signUpSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-  name: z.string().optional(),
-});
-const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string(),
-});
-const resendVerificationSchema = z.object({
-  email: z.string().email(),
-});
-const requestPasswordResetSchema = z.object({
-  email: z.string().email(),
-});
-const resetPasswordSchema = z.object({
-  token: z.string(),
-  password: z.string().min(8),
-});
 
 //* Register a new user
 //* POST /auth/register
@@ -155,7 +140,10 @@ auth.post(
     expires.setDate(expires.getDate() + 30);
 
     // Create session
-    const session = await createSession(user, expires);
+    const session = await createSession(user, expires, {
+      ipAddress: c.req.header("x-forwarded-for"),
+      userAgent: c.req.header("user-agent"),
+    });
 
     // Set session token in HTTP-only cookie
     await setSignedCookie(

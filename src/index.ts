@@ -4,7 +4,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { serve } from "@hono/node-server";
 
 import auth from "@/routes/auth-route";
-import { env } from "./env";
+import { env } from "./config/env";
 import { authMiddleware } from "./middleware/auth-middleware";
 import user from "./routes/user-route";
 

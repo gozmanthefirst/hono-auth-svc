@@ -2,9 +2,9 @@ import { deleteCookie, getSignedCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import { StatusCodes } from "http-status-codes";
 
-import { env } from "@/env";
-import { errorResponse } from "@/lib/api-response";
+import { env } from "@/config/env";
 import { validateSession } from "@/lib/session";
+import { errorResponse } from "@/utils/api-response";
 
 export const authMiddleware = createMiddleware(async (c, next) => {
   const sessionToken = await getSignedCookie(
