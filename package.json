@@ -2,6 +2,7 @@
   "name": "hono-auth-svc",
   "type": "module",
   "scripts": {
+    "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
     "format": "prettier --write .",
     "prepare": "husky install"

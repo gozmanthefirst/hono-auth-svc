@@ -44,7 +44,7 @@ app.route("/api/v1/user", user);
 serve(
   {
     fetch: app.fetch,
-    port: 8000,
+    port: env.PORT,
   },
   (info) => {
     console.log(`Server is running on http://localhost:${info.port}`);
